@@ -1,6 +1,6 @@
 <p align="center">
   <strong>PocketPentest AI Platform</strong>
-  <a href="./README_zh.md">中文</a>
+  <a href="./README_zh.md"> 🖕</a>
 </p>
 
 <p align="center">
