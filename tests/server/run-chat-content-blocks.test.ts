@@ -6,6 +6,7 @@ import {
   convertContentBlocks,
   convertContentBlocksForAgent,
   convertContentBlocksForCodingAgent,
+  isContentBlockArray,
 } from '../../packages/server/src/services/hermes/run-chat/content-blocks'
 
 let tempDir = ''
@@ -73,5 +74,16 @@ describe('run chat content blocks', () => {
         mediaType: 'image/png',
       }],
     })
+  })
+
+  it('detects content block arrays without throwing on primitive elements', () => {
+    expect(isContentBlockArray([{ type: 'text', text: 'hi' }])).toBe(true)
+    // A non-empty array whose first element is a primitive or null must return
+    // false rather than throwing "Cannot use 'in' operator" from `'type' in x`.
+    expect(isContentBlockArray(['hello'])).toBe(false)
+    expect(isContentBlockArray([null])).toBe(false)
+    expect(isContentBlockArray([42])).toBe(false)
+    expect(isContentBlockArray('hello')).toBe(false)
+    expect(isContentBlockArray([])).toBe(false)
   })
 })

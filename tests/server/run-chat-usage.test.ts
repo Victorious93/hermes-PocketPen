@@ -32,7 +32,28 @@ describe('run-chat usage token estimates', () => {
     const usage = estimateUsageTokensFromMessages(messages)
 
     expect(usage.inputTokens).toBe(0)
-    expect(usage.outputTokens).toBe(countTokens('calling tool') + countTokens(String(messages[0].tool_calls || '')))
+    expect(usage.outputTokens).toBe(
+      countTokens('calling tool') + countTokens(JSON.stringify(messages[0].tool_calls)),
+    )
+  })
+
+  it('counts the real tool_call argument payload, not "[object Object]"', () => {
+    const bigArguments = JSON.stringify({ path: 'a'.repeat(4000), body: 'b'.repeat(4000) })
+    const messages = [
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'write', arguments: bigArguments } }],
+      },
+    ]
+
+    const usage = estimateUsageTokensFromMessages(messages)
+
+    // The large argument payload must dominate the token count. The previous
+    // String(tool_calls) => "[object Object]" collapse counted only a handful
+    // of tokens regardless of argument size.
+    expect(usage.outputTokens).toBe(countTokens(JSON.stringify(messages[0].tool_calls)))
+    expect(usage.outputTokens).toBeGreaterThan(countTokens('[object Object]') + 100)
   })
 
   it('adds cached bridge fixed context when updating full context usage', () => {
