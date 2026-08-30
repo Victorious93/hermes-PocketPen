@@ -36,7 +36,7 @@ import { writeModelRunProfileToken } from './model-run-prompt'
 import type { AuthenticatedUser } from '../../../middleware/user-auth'
 import { ensureHermesRunWorkspace } from './workspace'
 import { observeRunChatPetEvent } from '../pet-state-socket'
-import { completeWorkspaceRunCheckpoint, startWorkspaceRunCheckpoint } from './workspace-diff-tracker'
+import { completeWorkspaceRunCheckpoint, discardWorkspaceRunCheckpoint, startWorkspaceRunCheckpoint } from './workspace-diff-tracker'
 
 const BRIDGE_USAGE_FLUSH_DELAY_MS = 200
 const BRIDGE_TITLE_EVENT_POLL_INTERVAL_MS = 500
@@ -698,7 +698,7 @@ export async function handleBridgeRun(
         runSource,
         workspace,
         currentInputTokens,
-        shouldPersistUserMessage && displayRole === 'user',
+        shouldPersistUserMessage && storageRole === 'user',
         data.model_groups,
         { autonomous: data.autonomous === true, delegationId: data.background_delegation_id, queueId: data.queue_id },
       )
@@ -744,12 +744,18 @@ export async function handleBridgeRun(
         runSource,
         workspace,
         currentInputTokens,
-        shouldPersistUserMessage && displayRole === 'user',
+        shouldPersistUserMessage && storageRole === 'user',
         data.model_groups,
         { autonomous: data.autonomous === true, delegationId: data.background_delegation_id, queueId: data.queue_id },
       )
     }
   } catch (err: any) {
+    // Release the workspace-diff checkpoint snapshot buffers captured at run
+    // start. Only the success/finalize path calls completeWorkspaceRunCheckpoint,
+    // so without this a failed run permanently leaks up to
+    // MAX_TOTAL_SNAPSHOT_BYTES of file buffers from the module-level checkpoint
+    // map. Discarding a missing key is a safe no-op.
+    discardWorkspaceRunCheckpoint({ sessionId: session_id, runId: state.runId })
     if (data.background_delegation_id && data.background_claim_id && !backgroundNotificationAccepted) {
       void bridge.releaseBackgroundNotification(
         session_id,
@@ -1570,6 +1576,10 @@ async function applyBridgeChunkAsync(
         dequeueNextQueuedRun(queuedSocket, queuedSessionId, fallbackProfile)
       },
     )
+    // The abort path returns before the finalize block that would call
+    // completeWorkspaceRunCheckpoint, so release the checkpoint's snapshot
+    // buffers here to avoid leaking them for every aborted run.
+    discardWorkspaceRunCheckpoint({ sessionId, runId: chunk.run_id })
     return
   }
 

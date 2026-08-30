@@ -50,6 +50,7 @@ const resolveBridgeRunModelConfigMock = vi.fn()
 const issueModelRunJwtMock = vi.fn(async () => 'model-run-token')
 const startWorkspaceRunCheckpointMock = vi.fn()
 const completeWorkspaceRunCheckpointMock = vi.fn()
+const discardWorkspaceRunCheckpointMock = vi.fn()
 const homes: string[] = []
 
 vi.mock('../../packages/server/src/lib/llm-prompt', () => ({
@@ -108,6 +109,7 @@ vi.mock('../../packages/server/src/services/hermes/run-chat/model-config', () =>
 vi.mock('../../packages/server/src/services/hermes/run-chat/workspace-diff-tracker', () => ({
   startWorkspaceRunCheckpoint: startWorkspaceRunCheckpointMock,
   completeWorkspaceRunCheckpoint: completeWorkspaceRunCheckpointMock,
+  discardWorkspaceRunCheckpoint: discardWorkspaceRunCheckpointMock,
 }))
 
 vi.mock('../../packages/server/src/services/hermes/hermes-profile', () => ({
@@ -1729,6 +1731,9 @@ describe('bridge run final context usage', () => {
       outputTokens: 7,
       contextTokens: 54321,
     }))
+    // The failure path must release the workspace-diff checkpoint so its
+    // snapshot buffers are not leaked (only the success path completes it).
+    expect(discardWorkspaceRunCheckpointMock).toHaveBeenCalled()
   })
 
   it('emits bridge lifecycle status events so retries are visible', async () => {

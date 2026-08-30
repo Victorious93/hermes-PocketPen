@@ -648,7 +648,13 @@ export async function handleSessionCommand(
 
     case 'clear': {
       if (command.args === '--history') {
-        if (state.isWorking) {
+        // Consult the bridge run status, not just local isWorking: after a
+        // client reconnect the in-memory state is recreated with
+        // isWorking=false while a prior bridge run is still live, and
+        // rewriting history underneath it corrupts the session (same reason
+        // /branch checks bridgeStatus).
+        const bridgeStatus = await getBridgeSessionStatus(ctx, sessionId)
+        if (state.isWorking || bridgeStatus?.running === true) {
           emitCommand({
             ok: false,
             action: 'clear',
@@ -697,7 +703,11 @@ export async function handleSessionCommand(
     }
 
     case 'compress': {
-      if (state.isWorking) {
+      // Consult the bridge run status too: a reconnect can leave local
+      // isWorking=false while a bridge run is still live, and compressing
+      // rewrites history underneath it (same guard /branch uses).
+      const bridgeStatus = await getBridgeSessionStatus(ctx, sessionId)
+      if (state.isWorking || bridgeStatus?.running === true) {
         emitCommand({ ok: false, action: 'compress', terminal: false, message: 'Compression can only run while the session is idle.' })
         return
       }
