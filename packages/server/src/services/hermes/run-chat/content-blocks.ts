@@ -64,7 +64,13 @@ export function extractTextForPreview(input: string | ContentBlock[]): string {
  * Check if input is ContentBlock array
  */
 export function isContentBlockArray(input: any): input is ContentBlock[] {
-  return Array.isArray(input) && input.length > 0 && ('type' in input[0])
+  return (
+    Array.isArray(input) &&
+    input.length > 0 &&
+    typeof input[0] === 'object' &&
+    input[0] !== null &&
+    'type' in input[0]
+  )
 }
 
 /**

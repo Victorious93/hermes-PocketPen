@@ -289,3 +289,68 @@ describe('branch session command', () => {
     }))
   })
 })
+
+describe('history-rewriting commands respect live bridge run status', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getSessionMock.mockReturnValue(makeParentSession())
+  })
+
+  it('rejects /compress when the bridge run is live even if local isWorking is false', async () => {
+    const { handleSessionCommand, parseSessionCommand } = await import('../../packages/server/src/services/hermes/run-chat/session-command')
+    const compression = await import('../../packages/server/src/services/hermes/run-chat/compression')
+    const { nsp, socket, namespaceEmit } = makeSocketHarness()
+    // Local state looks idle (e.g. recreated after a reconnect) while the
+    // bridge run is still in flight.
+    const sessionMap = new Map<string, any>([
+      ['session-1', { messages: [], isWorking: false, events: [], queue: [] }],
+    ])
+    const ctx = makeCtx(sessionMap, nsp, socket, {
+      status: vi.fn(async () => ({ exists: true, running: true, currentRunId: 'run-live' })),
+    })
+
+    await handleSessionCommand('session-1', parseSessionCommand('/compress')!, ctx)
+
+    expect(compression.forceCompressBridgeHistory).not.toHaveBeenCalled()
+    expect(namespaceEmit).toHaveBeenCalledWith('session.command', expect.objectContaining({
+      action: 'compress',
+      ok: false,
+      message: expect.stringContaining('idle'),
+    }))
+  })
+
+  it('rejects /clear --history when the bridge run is live even if local isWorking is false', async () => {
+    const { handleSessionCommand, parseSessionCommand } = await import('../../packages/server/src/services/hermes/run-chat/session-command')
+    const { nsp, socket, namespaceEmit } = makeSocketHarness()
+    const sessionMap = new Map<string, any>([
+      ['session-1', { messages: [], isWorking: false, events: [], queue: [] }],
+    ])
+    const ctx = makeCtx(sessionMap, nsp, socket, {
+      status: vi.fn(async () => ({ exists: true, running: true, currentRunId: 'run-live' })),
+    })
+
+    await handleSessionCommand('session-1', parseSessionCommand('/clear --history')!, ctx)
+
+    expect(clearSessionMessagesMock).not.toHaveBeenCalled()
+    expect(namespaceEmit).toHaveBeenCalledWith('session.command', expect.objectContaining({
+      action: 'clear',
+      ok: false,
+      message: expect.stringContaining('bridge run is active'),
+    }))
+  })
+
+  it('allows /clear --history when both local state and the bridge are idle', async () => {
+    const { handleSessionCommand, parseSessionCommand } = await import('../../packages/server/src/services/hermes/run-chat/session-command')
+    const { nsp, socket } = makeSocketHarness()
+    const sessionMap = new Map<string, any>([
+      ['session-1', { messages: [{ id: 1, role: 'user', content: 'hi' }], isWorking: false, events: [], queue: [] }],
+    ])
+    const ctx = makeCtx(sessionMap, nsp, socket, {
+      status: vi.fn(async () => ({ exists: true, running: false, currentRunId: null })),
+    })
+
+    await handleSessionCommand('session-1', parseSessionCommand('/clear --history')!, ctx)
+
+    expect(clearSessionMessagesMock).toHaveBeenCalledWith('session-1')
+  })
+})

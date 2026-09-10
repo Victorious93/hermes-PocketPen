@@ -33,13 +33,27 @@ function contentToUsageText(content: unknown): string {
   return String(content)
 }
 
+function toolCallsToUsageText(toolCalls: unknown): string {
+  // tool_calls is an array of objects; String() would collapse it to
+  // "[object Object]" and drop the argument payload from the token count,
+  // which makes tool-heavy turns look far smaller than they are and lets the
+  // compression threshold in compression.ts trigger too late.
+  if (toolCalls == null) return ''
+  if (typeof toolCalls === 'string') return toolCalls
+  try {
+    return JSON.stringify(toolCalls)
+  } catch {
+    return String(toolCalls)
+  }
+}
+
 export function estimateUsageTokensFromMessages(messages: UsageTokenMessage[]): { inputTokens: number; outputTokens: number } {
   const inputTokens = messages
     .filter(m => m.role === 'user')
     .reduce((sum, m) => sum + countTokens(contentToUsageText(m.content)), 0)
   const outputTokens = messages
     .filter(m => m.role === 'assistant' || m.role === 'tool')
-    .reduce((sum, m) => sum + countTokens(contentToUsageText(m.content)) + countTokens(String(m.tool_calls || '')), 0)
+    .reduce((sum, m) => sum + countTokens(contentToUsageText(m.content)) + countTokens(toolCallsToUsageText(m.tool_calls)), 0)
   return { inputTokens, outputTokens }
 }
 

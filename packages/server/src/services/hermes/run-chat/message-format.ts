@@ -154,6 +154,7 @@ export function handleMessage(messages: SessionMessage[], sid: string): any[] {
       })
       .filter(m => m !== null)
   } catch (error) {
+    logger.error(error, '[chat-run-socket] failed to format session messages for %s', sid)
   }
   return _messages
 }
